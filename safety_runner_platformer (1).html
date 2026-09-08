@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Safety Runner</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#dceee9;font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#17332f;display:grid;place-items:center;min-height:100vh;padding:16px}
+.game{width:min(1000px,100%);background:#fff;border-radius:24px;overflow:hidden;box-shadow:0 18px 55px #17332f25}
+header{background:#126f60;color:white;padding:22px 28px}h1{margin:0;font-size:clamp(27px,5vw,40px)}header p{margin:4px 0 0;opacity:.9}
+.hud{display:flex;gap:25px;padding:12px 22px;background:#f5faf8;border-bottom:1px solid #dce9e5;font-weight:800}.hud span{margin-right:4px}
+main{padding:20px}.screen{text-align:center;padding:28px 10px}.screen h2{font-size:30px}.screen p{max-width:680px;margin:10px auto 22px;color:#607570;line-height:1.6}
+button{border:0;border-radius:11px;padding:12px 20px;background:#126f60;color:#fff;font-weight:800;font-size:16px;cursor:pointer}button:hover{filter:brightness(.94)}
+canvas{display:block;width:100%;height:auto;border:4px solid #b7ccc6;border-radius:16px;background:#dff1ee;touch-action:none}
+.controls{display:flex;justify-content:center;gap:14px;margin-top:13px}.controls button{width:100px;font-size:25px;padding:10px}
+.hidden{display:none!important}.small{font-size:14px}.good{color:#126f60;font-weight:800}
+@media(max-width:600px){main{padding:12px}.hud{font-size:14px;gap:12px}.controls button{width:85px}}
+</style>
+</head>
+<body>
+<div class="game">
+<header><h1>🦺 Safety Runner</h1><p>Jump over unsafe objects. Walk safely through harmless ones.</p></header>
+<div class="hud">
+<div>⭐ Score <span id="score">0</span></div>
+<div>❤️ Lives <span id="lives">3</span></div>
+<div>📏 Distance <span id="distance">0</span>m</div>
+</div>
+<main>
+<section id="start" class="screen">
+<div style="font-size:65px">🏃‍♂️</div>
+<h2>Ready to run?</h2>
+<p>Move through the workplace. <b>Jump over hazards</b> such as spills, cables and open drawers. Safe objects like plants and warning signs can be walked through.</p>
+<p class="small">Keyboard: <b>← →</b> move &nbsp; <b>Space / ↑</b> jump</p>
+<button onclick="begin()">Start game</button>
+</section>
+<section id="game" class="hidden">
+<canvas id="canvas" width="960" height="460"></canvas>
+<div class="controls">
+<button onpointerdown="left=true" onpointerup="left=false">◀</button>
+<button onpointerdown="jump()">⬆</button>
+<button onpointerdown="right=true" onpointerup="right=false">▶</button>
+</div>
+<p id="message" style="text-align:center;font-weight:700">Jump over the hazards!</p>
+</section>
+<section id="end" class="screen hidden">
+<div style="font-size:65px">🏆</div><h2>Safety run complete!</h2>
+<p id="final"></p>
+<button onclick="begin()">Run again</button>
+</section>
+</main>
+</div>
+
+<script>
+const c=document.getElementById('canvas'),ctx=c.getContext('2d');
+let player,objects,score,lives,distance,running,left=false,right=false,last=0,speed=3.1;
+const W=c.width,H=c.height,ground=370;
+
+function begin(){
+ document.getElementById('start').classList.add('hidden');
+ document.getElementById('end').classList.add('hidden');
+ document.getElementById('game').classList.remove('hidden');
+ score=0;lives=3;distance=0;running=true;left=right=false;
+ player={x:110,y:ground-52,w:34,h:52,vy:0,onGround:true};
+ objects=[
+  {x:350,y:ground-35,w:45,h:35,type:'hazard',icon:'💧',name:'Wet floor'},
+  {x:520,y:ground-25,w:70,h:25,type:'safe',icon:'🌱',name:'Plant'},
+  {x:690,y:ground-30,w:55,h:30,type:'hazard',icon:'🔌',name:'Loose cable'},
+  {x:870,y:ground-45,w:48,h:45,type:'safe',icon:'⚠️',name:'Warning sign'},
+  {x:1080,y:ground-35,w:55,h:35,type:'hazard',icon:'🗄️',name:'Open drawer'},
+  {x:1280,y:ground-30,w:65,h:30,type:'safe',icon:'📦',name:'Stored box'},
+  {x:1490,y:ground-35,w:50,h:35,type:'hazard',icon:'🛢️',name:'Spill'},
+  {x:1710,y:ground-45,w:55,h:45,type:'safe',icon:'🧯',name:'Safety equipment'},
+  {x:1930,y:ground-28,w:65,h:28,type:'hazard',icon:'🧹',name:'Object in walkway'}
+ ];
+ updateHud(); last=performance.now();requestAnimationFrame(loop);
+}
+
+function updateHud(){
+ document.getElementById('score').textContent=score;
+ document.getElementById('lives').textContent=lives;
+ document.getElementById('distance').textContent=Math.floor(distance/10);
+}
+function jump(){
+ if(running && player.onGround){player.vy=-11.5;player.onGround=false}
+}
+function resetPlayer(obj){
+ player.x=Math.max(70,player.x-70);player.y=ground-player.h;player.vy=0;
+ obj.hit=true;lives--;score=Math.max(0,score-50);
+ document.getElementById('message').textContent='⚠️ You hit '+obj.name+' — remember to jump over unsafe objects!';
+ if(lives<=0) endGame();
+ updateHud();
+}
+function endGame(){
+ running=false;
+ document.getElementById('game').classList.add('hidden');
+ document.getElementById('end').classList.remove('hidden');
+ document.getElementById('final').innerHTML='You scored <b>'+score+' points</b> and reached '+Math.floor(distance/10)+'m. '+(lives?'Great safety awareness!':'Watch the hazards and try again!');
+}
+function loop(now){
+ if(!running)return;
+ const dt=Math.min(2,(now-last)/16.67);last=now;
+ distance+=speed*dt;
+ if(left)player.x-=4*dt;if(right)player.x+=4*dt;
+ player.x=Math.max(55,Math.min(430,player.x));
+ player.vy+=.62*dt;player.y+=player.vy*dt;
+ if(player.y>=ground-player.h){player.y=ground-player.h;player.vy=0;player.onGround=true}
+ objects.forEach(o=>o.x-=speed*dt);
+ const hitbox={x:player.x+6,y:player.y+6,w:player.w-12,h:player.h-8};
+ objects.forEach(o=>{
+   if(o.hit)return;
+   const collide=hitbox.x<o.x+o.w&&hitbox.x+hitbox.w>o.x&&hitbox.y<o.y+o.h&&hitbox.y+hitbox.h>o.y;
+   if(collide){
+     if(o.type==='hazard')resetPlayer(o);
+     else {o.hit=true;score+=10;document.getElementById('message').textContent='✓ Safe to walk through '+o.name+'.';updateHud()}
+   }
+ });
+ if(objects.every(o=>o.hit||o.x<-100)){endGame();return}
+ draw();updateHud();requestAnimationFrame(loop);
+}
+function draw(){
+ ctx.clearRect(0,0,W,H);
+ const grad=ctx.createLinearGradient(0,0,0,H);grad.addColorStop(0,'#dff1ee');grad.addColorStop(1,'#f7e7c9');ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+ ctx.fillStyle='#c7d7d3';ctx.fillRect(0,0,W,95);
+ ctx.fillStyle='#9a7351';ctx.fillRect(0,ground,W,H-ground);
+ ctx.strokeStyle='#79563d';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(0,ground);ctx.lineTo(W,ground);ctx.stroke();
+ // background windows
+ ctx.fillStyle='#bfe4ef';for(let x=35;x<W;x+=170)ctx.fillRect(x,25,90,48);
+ // objects
+ objects.forEach(o=>{
+   if(o.hit)return;
+   const sx=o.x;
+   if(sx<-100||sx>W+100)return;
+   ctx.font='42px system-ui';ctx.textAlign='center';ctx.fillText(o.icon,sx+o.w/2,o.y+o.h-2);
+   if(o.type==='hazard'){ctx.fillStyle='#d9534f';ctx.font='bold 13px system-ui';ctx.fillText('HAZARD',sx+o.w/2,o.y-7)}
+ });
+ // player
+ ctx.font='46px system-ui';ctx.textAlign='center';ctx.fillText('🦺',player.x+player.w/2,player.y+43);
+ ctx.fillStyle='#17332f';ctx.font='bold 12px system-ui';ctx.fillText('YOU',player.x+player.w/2,player.y-7);
+}
+document.addEventListener('keydown',e=>{
+ if(e.code==='ArrowLeft')left=true;
+ if(e.code==='ArrowRight')right=true;
+ if(e.code==='Space'||e.code==='ArrowUp'){e.preventDefault();jump()}
+});
+document.addEventListener('keyup',e=>{
+ if(e.code==='ArrowLeft')left=false;
+ if(e.code==='ArrowRight')right=false;
+});
+</script>
+</body>
+</html>
